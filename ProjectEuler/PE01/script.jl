@@ -1,7 +1,7 @@
 using Curry
 using Base.Iterators
 range_sum(x) = x * (x+1) / 2
-range_multiple_sum(limit, multiple::Integer) = range_sum(limit ÷ multiple) * multiple
+range_multiple_sum(limit::Integer, multiple::Integer) = range_sum(limit ÷ multiple) * multiple
 f(a,b) = mapreduce(curry(range_multiple_sum)(a), +, b)
 
 function products(A)
