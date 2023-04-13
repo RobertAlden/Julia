@@ -1,4 +1,5 @@
 using BenchmarkTools
+
 function main()
     x = y = 1
     sum = 0
@@ -8,4 +9,6 @@ function main()
     end
   return sum
 end
+
+@time main()
 @btime main()
