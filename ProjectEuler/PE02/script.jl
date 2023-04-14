@@ -7,7 +7,7 @@ function main()
         sum += (x + y)
         x, y = x + 2 * y, 2 * x + 3 * y
     end
-  return sum
+    return sum
 end
 
 @time main()
