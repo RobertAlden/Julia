@@ -1,6 +1,4 @@
-using BenchmarkTools
-using Curry
-using Base.Iterators
+using Curry, Base.Iterators, BenchmarkTools
 
 range_sum(x) = x * (x+1) / 2
 range_multiple_sum(limit::Integer, multiple::Integer) = range_sum(limit ÷ multiple) * multiple
