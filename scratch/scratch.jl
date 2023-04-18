@@ -28,4 +28,4 @@ function main()
     write("output.gif", film)
 end
 
-@time main()
+main()
