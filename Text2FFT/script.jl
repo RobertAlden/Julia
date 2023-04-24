@@ -1,10 +1,20 @@
+using AbbreviatedStackTraces, Infiltrator
 using Compose, Colors, Reel, FileIO, ImageFiltering
 import Cairo, Fontconfig
 
 rgbToGrey(rgb::RGB) = 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b
 greyToRGB(f) = RGB(f,f,f)
 threshold(x,tl,th) = x > tl ? (x < th ? x : 1) : 0
-quantize(n,v) = n / (1/v)
+
+function nonMaximumSuppression(m_dir, m_mag)
+
+end
+
+function quantize(n,start,stop,v)
+    dist = stop - start
+    width = (dist / v)
+    round(Integer, n / width) * dist
+end
 
 function textToImage(txt)
     text_composition = compose(context(),
@@ -26,8 +36,9 @@ function edgeDetection(im)
     Iₖ = imfilter(I₀, K')
     Iᵢₖ = @. √(Iᵢ^2 + Iₖ^2)
     Iₐ = @. atan(Iₖ/Iᵢ)
-    Iᵩ = quantize(Iₐ,8)
-    Iₜ = threshold.(Iᵢₖ,0.99,1)
+    Iᵩ = quantize.(Iₐ,0,2π,8)
+    Iₙₘ = nonMaximumSuppression(Iᵢₖ, Iᵩ)
+    Iₜ = threshold.(Iₙₘ,0.99,1)
     greyToRGB.(Iₜ)
 end
 
