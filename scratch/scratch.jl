@@ -1,31 +1,37 @@
-using Compose, Colors, Reel
-import Cairo, Fontconfig
+using Images, ImageEdgeDetection, Noise, FileIO
+using ImageEdgeDetection: Percentile
+using TestImages
 
-function spiral(θ,n,colors)
-    P = [0:n;]
-    ⦞ =  @. ( P * 2θ * π - θ) / n
-    S = P ./ n .* 0.45
-    x = @. sin(⦞) * S + .5
-    y = @. cos(⦞) * S + .5
-    compose(context(),
-            circle(x, y, [0.015, 0.02, 0.015, 0.025]),
-            fill(colors))
-end  
+function make_simple_image(sz)
+    img_gray = zeros(Gray{Float64}, sz...)
+    fill_region = map(x->x÷4:3x÷4, sz)
+    img_gray[fill_region...] .= 1
+    img_rot = imrotate(img_gray, pi/4)
 
-function main()
-    dim = 512px
-    set_default_graphic_size(dim, dim)
-    figsize = 1px
-    n = 500
-    number_of_colors = 10
-    start = HSV(0,1,1)
-    stop = HSV(360,1,1)
-    inital_colors = range(start,stop=stop, length=number_of_colors)
-    final_colors = repeat(inital_colors, n÷number_of_colors+1)[1:n+1]
-    film = roll(fps=30, duration=10) do t, dt
-        spiral(5t,n,final_colors)
-    end
-    write("output.gif", film)
+    # Corrupt the image with blur and noise, it makes our canny edge detection
+    # function works a little harder since the canny filter is based on the idea
+    # of finding gradients.
+    img_gauss = imfilter(img_rot, Kernel.gaussian(2))
+
+    # We use `salt_pepper` filter from `Noise.jl`. Salt-and-pepper noise in general
+    # is a noise that modifies a pixel with two different values of noise.
+    # Here we only random set pixels to white.
+    img_noise = salt_pepper(img_gauss, 0.05, salt_prob = 0, pepper = 0.9)
 end
 
-main()
+function main()
+    img = make_simple_image((200, 200))
+
+    cameraman = FileIO.load("text.png")
+    canny(σ) = Canny(spatial_scale=σ, high=Percentile(80), low=Percentile(20))
+    simple_results = map(σ->detect_edges(img, canny(σ)), 1:10)
+    cameraman_results = map(σ->detect_edges(cameraman, canny(σ)), 1:10)
+
+    mosaicview(
+        mosaicview(img, cameraman),
+        map(mosaicview, simple_results, cameraman_results)...;
+        nrow=1
+    )
+end
+
+main()  
