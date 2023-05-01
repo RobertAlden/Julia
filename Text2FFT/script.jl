@@ -1,10 +1,8 @@
-using Match
-using Compose, Colors, Reel, FileIO, ImageFiltering, Images, ImageEdgeDetection
+using Match, AbbreviatedStackTraces
+using Compose, Colors, Reel, FileIO, ImageFiltering, Images, ImageEdgeDetection 
 using ImageEdgeDetection: Percentile
+using Random, IterTools
 import Cairo, Fontconfig
-
-rgbToGrey(rgb::RGB) = 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b
-greyToRGB(f) = RGB(f,f,f)
 
 function textToImage(txt)
     text_composition = compose(context(),
@@ -30,13 +28,69 @@ function edgeSimplification(img)
     img
 end
 
+function distance2(p) 
+    a,b = first(p), last(p)
+    ax,ay = first(a), last(a)
+    bx,by = first(b), last(b)
+    (bx - ax)^2 + (by - ay)^2
+end
 
+function fitness(genome)
+    sum(distance2(p) for p in partition(Tuple.(vcat(genome,[genome[1]])),2,1))
+end
+
+function reproduction(population, elites)
+    evaluatedPopulation = 1 ./ fitness.(population)
+    normalizedPopulation = evaluatedPopulation ./ sum(evaluatedPopulation)
+    newPopulation = sort(population,rev=true)[1:elites]
+    n = length(population) - elites
+    for i=1:n  
+        parent1 = selection(normalizedPopulation)
+        parent2 = selection(normalizedPopulation)
+        offspring = orderedCrossover(population[parent1], population[parent2])
+        offspring = mutation(offspring,0.05)
+        push!(newPopulation,offspring)
+    end
+    newPopulation
+end
+
+function selection(p)
+    limit = 1
+    x = 1
+    while limit > 0 
+        x = rand(1:length(p))
+        limit -= p[x]
+    end
+    x
+end
+
+function mutation(genome, rate)
+    genome
+end
+
+function orderedCrossover(g1, g2)
+    spliceEnd = rand(2:length(g1))
+    spliceBegin = rand(1:spliceEnd)
+    splice = g1[spliceBegin:spliceEnd]
+    rest = [ i for i ∈ g2 if i ∉ splice]
+    [rest[1:spliceBegin]; splice; rest[spliceEnd:(length(g1)-(spliceEnd-spliceBegin+1))];]
+end
 
 function TSP(img)
     # genetic algorithm
-    fitness(genome) = inds = Tuple.(genome); first.(inds).^2 .+ last.(inds).^2
-    points = Tuple.(findall(x->x === RGB(1,1,1), img))
-    println(points)
+    Random.seed!(10) #random seed
+    iterations = 5
+    numIndividuals = 5
+    numElites = 1
+
+    points = shuffle(findall(x->x === RGB(1,1,1), img))
+    initial = fitness(points)
+    population = [shuffle([1:length(points);]) for i=1:numIndividuals]
+    for i=1:iterations
+        population = reproduction(population, numElites)
+    end
+    final = last(sort(fitness.(population)))
+    println("Before: $initial, After: $final")
     img 
 end
 
