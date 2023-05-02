@@ -35,62 +35,59 @@ function distance2(p)
     (bx - ax)^2 + (by - ay)^2
 end
 
-function fitness(genome)
-    sum(distance2(p) for p in partition(Tuple.(vcat(genome,[genome[1]])),2,1))
-end
-
-function reproduction(population, elites)
-    evaluatedPopulation = 1 ./ fitness.(population)
-    normalizedPopulation = evaluatedPopulation ./ sum(evaluatedPopulation)
-    newPopulation = sort(population,rev=true)[1:elites]
-    n = length(population) - elites
-    for i=1:n  
-        parent1 = selection(normalizedPopulation)
-        parent2 = selection(normalizedPopulation)
-        offspring = orderedCrossover(population[parent1], population[parent2])
-        offspring = mutation(offspring,0.05)
-        push!(newPopulation,offspring)
-    end
-    newPopulation
-end
-
-function selection(p)
-    limit = 1
-    x = 1
-    while limit > 0 
-        x = rand(1:length(p))
-        limit -= p[x]
-    end
-    x
+function fitness(genome,points)
+    g = points[genome]
+    sum(distance2(p) for p ∈ partition(Tuple.(vcat(g,[g[1]])),2,1))
 end
 
 function mutation(genome, rate)
+    for i in eachindex(genome)
+        if rand() < rate
+            swap = rand(1:length(genome))
+            genome[i], genome[swap] = genome[swap], genome[i]
+        end
+    end
     genome
-end
-
-function orderedCrossover(g1, g2)
-    spliceEnd = rand(2:length(g1))
-    spliceBegin = rand(1:spliceEnd)
-    splice = g1[spliceBegin:spliceEnd]
-    rest = [ i for i ∈ g2 if i ∉ splice]
-    [rest[1:spliceBegin]; splice; rest[spliceEnd:(length(g1)-(spliceEnd-spliceBegin+1))];]
 end
 
 function TSP(img)
     # genetic algorithm
     Random.seed!(10) #random seed
-    iterations = 5
-    numIndividuals = 5
-    numElites = 1
 
-    points = shuffle(findall(x->x === RGB(1,1,1), img))
-    initial = fitness(points)
-    population = [shuffle([1:length(points);]) for i=1:numIndividuals]
-    for i=1:iterations
-        population = reproduction(population, numElites)
+    points = findall(x->x === RGB(1,1,1), img)
+    points = filter(_->rand() < 0.05,points)
+    N = length(points)
+    println(N)
+
+    fitnessFunction = x -> fitness(x,points)
+    startLength = fitnessFunction([1:N;])
+    currentLength = startLength
+    path = [1:N;]
+    improvement = true
+    while improvement
+        improvement = false
+        for i=1:N-1, j=i+1:N
+            lengthDelta = (-distance2(Tuple.(points[path[[i,i+1]]])) -
+                            distance2(Tuple.(points[path[[j,j+1]]])) +
+                            distance2(Tuple.(points[path[[i,j]]]))   +
+                            distance2(Tuple.(points[path[[i+1,j+1]]])))
+            if lengthDelta > 0
+                path[i:j] .= reverse(path[i:j])
+                currentLength += lengthDelta
+                improvement = true
+            end
+        end
     end
-    final = last(sort(fitness.(population)))
-    println("Before: $initial, After: $final")
+
+    lines::Vector{Tuple{Int64,Int64}} = [(i[2],i[1]) for i in points[final]]
+    push!(lines,lines[1])
+    composition = compose(
+                    context(units=UnitBox(0,0,352,64)), 
+                    (context(), line(lines), stroke("white"), linewidth(1px))
+                    #,(context(), rectangle(), fill("white"))
+                  )
+    draw(PNG("lines.png", 352px, 64px), composition)
+    println("Distance reduction: $(trunc((1-fitnessFunction(final)/initial)*100))%")
     img 
 end
 
