@@ -28,77 +28,111 @@ function edgeSimplification(img)
     img
 end
 
-function distance2(p) 
-    a,b = first(p), last(p)
-    ax,ay = first(a), last(a)
-    bx,by = first(b), last(b)
-    (bx - ax)^2 + (by - ay)^2
+function distance2(ab) 
+    ((ax,ay),(bx,by)) = ab
+    (ax-bx)^2 + (ay-by)^2
 end
 
-function fitness(genome,points)
-    g = points[genome]
-    sum(distance2(p) for p ∈ partition(Tuple.(vcat(g,[g[1]])),2,1))
-end
-
-function mutation(genome, rate)
-    for i in eachindex(genome)
-        if rand() < rate
-            swap = rand(1:length(genome))
-            genome[i], genome[swap] = genome[swap], genome[i]
-        end
-    end
-    genome
+function pathDistance2(path)
+    sum(distance2.(partition([path;[path[1]]],2,1)))
 end
 
 function TSP(img)
+    height,width = size(img)
     # genetic algorithm
     Random.seed!(10) #random seed
-
     points = findall(x->x === RGB(1,1,1), img)
-    points = filter(_->rand() < 0.05,points)
+
+    #ad hoc filter
+    points = filter(_->rand() < 0.1,points)
+    
+    points = [Tuple(i) for i in points]
     N = length(points)
     println(N)
-
-    fitnessFunction = x -> fitness(x,points)
-    startLength = fitnessFunction([1:N;])
-    currentLength = startLength
     path = [1:N;]
+    startLength = pathDistance2(points[path])
+    currentLength = startLength
     improvement = true
-    while improvement
+    @views while improvement
         improvement = false
-        for i=1:N-1, j=i+1:N
-            lengthDelta = (-distance2(Tuple.(points[path[[i,i+1]]])) -
-                            distance2(Tuple.(points[path[[j,j+1]]])) +
-                            distance2(Tuple.(points[path[[i,j]]]))   +
-                            distance2(Tuple.(points[path[[i+1,j+1]]])))
-            if lengthDelta > 0
-                path[i:j] .= reverse(path[i:j])
+        for u=0:N, v=u+1:N-1
+            i = u + 1
+            j = v + 1
+            AC = points[path[[i,mod1(i+1,N)]]]
+            BD = points[path[[j,mod1(j+1,N)]]]
+            AB = points[path[[i,j]]]
+            CD = points[path[[mod1(i+1,N),mod1(j+1,N)]]]
+            ACBD = (distance2(AC) + distance2(BD))
+            ABCD = (distance2(AB) + distance2(CD))
+            lengthDelta = -ACBD + ABCD
+            if lengthDelta < 0
+                path[i+1:j] .= reverse(path[i+1:j])
                 currentLength += lengthDelta
+                currentLength < 0 && break
                 improvement = true
             end
         end
     end
 
-    lines::Vector{Tuple{Int64,Int64}} = [(i[2],i[1]) for i in points[final]]
+    lines::Vector{Tuple{Int64,Int64}} = [(i[2],i[1]) for i in points[path]]
     push!(lines,lines[1])
     composition = compose(
-                    context(units=UnitBox(0,0,352,64)), 
+                    context(units=UnitBox(0,0,width,height)), 
                     (context(), line(lines), stroke("white"), linewidth(1px))
-                    #,(context(), rectangle(), fill("white"))
+                    ,(context(), rectangle(), fill("black"))
                   )
-    draw(PNG("lines.png", 352px, 64px), composition)
-    println("Distance reduction: $(trunc((1-fitnessFunction(final)/initial)*100))%")
-    img 
+    draw(PNG("3tsp.png", (width)px, (height)px), composition)
+    println("Distance reduction: $(trunc((1-pathDistance2(points[path])/startLength)*100))%")
+    (img,points[path])
 end
 
-function fourierSeries(img)
+function fourierSeries(imgpath)
+    img,path = imgpath
     # note: Cn = ∫01 ℯ^(-2πιnt) f(t)dt
-    #average points
-    img 
+    N = length(path)
+    dt = 1/N
+    iterations = 10
+    xs, ys = (first.(path),last.(path))
+    Cxs = []
+    Cys = []
+    for n=0:iterations-1
+        push!(Cxs,sum((xs[i]*cos(-2π*n*((i-1)*dt))*dt) for i=1:N))
+        push!(Cys,sum((ys[i]*sin(-2π*n*((i-1)*dt))*dt) for i=1:N))
+    end
+    (img,Cxs,Cys)
 end
 
-function animate(img)
-    img 
+function driver(t,N,Cx,Cy,trace)
+    Xs = [Cx[x] * cos(x*t) for x=1:N]
+    Ys = [Cy[y] * sin(y*t) for y=1:N]
+    z = 150
+    lines = collect(IterTools.partition(accumulate(.+,zip(Xs,Ys)),2,1))
+    push!(trace,last(lines)[2])
+    #println(trace)
+    trace_lines = collect(IterTools.partition(trace,2,1))
+    compose(
+        context(0.05,0.05,0.9,0.9), 
+        (context(units=UnitBox(-z,-z,2z,2z)),
+            line(lines),stroke("grey"), linewidth(1px)),
+        (context(units=UnitBox(-z,-z,2z,2z)),
+            line(trace_lines),stroke("white"), linewidth(1px)),  
+    )
+
+end
+
+function animate(imgconsts)
+    dim = 256px
+    set_default_graphic_size(dim, dim)
+
+    img,Cxs,Cys = imgconsts
+    N = length(Cxs)
+    time = 10
+    trace = []
+    film = roll(fps=30, duration=time) do t, dt
+        driver(t*time,N,Cxs,Cys,trace)
+    end
+    write("output.gif", film)
+    img
 end
 
 function main()
