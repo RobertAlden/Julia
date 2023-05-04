@@ -1,8 +1,8 @@
-using Match, AbbreviatedStackTraces
-using Compose, Colors, Reel, FileIO, ImageFiltering, Images, ImageEdgeDetection 
+using Compose, Colors, Reel, FileIO, ImageFiltering, Images, ImageEdgeDetection, Match, AbbreviatedStackTraces 
 using ImageEdgeDetection: Percentile
-using Random, IterTools
 import Cairo, Fontconfig
+
+using Random, IterTools
 
 function textToImage(txt)
     text_composition = compose(context(),
@@ -83,28 +83,26 @@ function TSP(img)
                   )
     draw(PNG("3tsp.png", (width)px, (height)px), composition)
     println("Distance reduction: $(trunc((1-pathDistance2(points[path])/startLength)*100))%")
-    (img,points[path])
+    points[path]
 end
 
-function fourierSeries(imgpath)
-    img,path = imgpath
+function fourierSeries(path)
     # note: Cn = ∫01 ℯ^(-2πιnt) f(t)dt
     N = length(path)
     dt = 1/N
-    iterations = 10
-    xs, ys = (first.(path),last.(path))
-    Cxs = []
-    Cys = []
+    iterations = 250
+    Cs = complex.(first.(path),last.(path))
+    Cn = []
     for n=0:iterations-1
-        push!(Cxs,sum((xs[i]*cos(-2π*n*((i-1)*dt))*dt) for i=1:N))
-        push!(Cys,sum((ys[i]*sin(-2π*n*((i-1)*dt))*dt) for i=1:N))
+        push!(Cn,sum((Cs[i]*cispi(-2*n*(i-1)*dt)) for i=1:N)/N)
     end
-    (img,Cxs,Cys)
+    #println(Cn)
+    Cn
 end
 
-function driver(t,N,Cx,Cy,trace)
-    Xs = [Cx[x] * cos(x*t) for x=1:N]
-    Ys = [Cy[y] * sin(y*t) for y=1:N]
+function driver(t,N,Cs, trace)
+    Xs = [real(Cs[i]) * cos((i-1)*t) for i=1:N]
+    Ys = [imag(Cs[i]) * sin((i-1)*t) for i=1:N]
     z = 150
     lines = collect(IterTools.partition(accumulate(.+,zip(Xs,Ys)),2,1))
     push!(trace,last(lines)[2])
@@ -120,19 +118,18 @@ function driver(t,N,Cx,Cy,trace)
 
 end
 
-function animate(imgconsts)
+function animate(consts)
     dim = 256px
     set_default_graphic_size(dim, dim)
 
-    img,Cxs,Cys = imgconsts
-    N = length(Cxs)
+    Cs = consts
+    N = length(Cs)
     time = 10
     trace = []
     film = roll(fps=30, duration=time) do t, dt
-        driver(t*time,N,Cxs,Cys,trace)
+        driver(t,N,Cs,trace)
     end
     write("output.gif", film)
-    img
 end
 
 function main()
@@ -143,8 +140,7 @@ function main()
     edgeSimplification |> 
     TSP |>
     fourierSeries |>
-    animate |>
-    FileIO.save("out.png")
+    animate
 end
 
 @time main()
