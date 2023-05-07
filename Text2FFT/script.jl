@@ -1,4 +1,4 @@
-using Compose, Colors, Reel, FileIO, ImageFiltering, Images, ImageEdgeDetection, Match, AbbreviatedStackTraces 
+using Compose, Colors, Reel, FileIO, ImageFiltering, Images, ImageEdgeDetection, Match, AbbreviatedStackTraces, FFTW, FFTViews
 using ImageEdgeDetection: Percentile
 import Cairo, Fontconfig
 
@@ -44,11 +44,10 @@ function TSP(img)
     points = findall(x->x === RGB(1,1,1), img)
 
     #ad hoc filter
-    points = filter(_->rand() < 0.1,points)
+    points = filter(_->rand() < 1,points)
     
     points = [Tuple(i) for i in points]
     N = length(points)
-    println(N)
     path = [1:N;]
     startLength = pathDistance2(points[path])
     currentLength = startLength
@@ -83,57 +82,74 @@ function TSP(img)
                   )
     draw(PNG("3tsp.png", (width)px, (height)px), composition)
     println("Distance reduction: $(trunc((1-pathDistance2(points[path])/startLength)*100))%")
-    points[path]
+    push!(path,first(path))
+    (points[path],width,height)
 end
 
-function fourierSeries(path)
+lerp(a,b,t) = (b - a) * t + a
+
+function interpolateData(data,t) 
+    n = length(data)
+    t == 1.0 && return data[n]
+    subt = t - trunc(t)
+    ti = trunc(Int,t)
+    lerp(data[ti+1],data[ti+2],subt)
+end 
+
+
+function fourierSeries(data)
     # note: Cn = ∫01 ℯ^(-2πιnt) f(t)dt
+    path,width,height = data
     N = length(path)
     dt = 1/N
-    iterations = 250
-    Cs = complex.(first.(path),last.(path))
-    Cn = []
-    for n=0:iterations-1
-        push!(Cn,sum((Cs[i]*cispi(-2*n*(i-1)*dt)) for i=1:N)/N)
-    end
-    #println(Cn)
-    Cn
+    println("dt/N:$dt $N")
+    Ft = complex.(last.(path)/width,first.(path)/height)
+    fs = fft(Ft) |> FFTView
+    fs ./= N
+    fs,width,height
 end
 
-function driver(t,N,Cs, trace)
-    Xs = [real(Cs[i]) * cos((i-1)*t) for i=1:N]
-    Ys = [imag(Cs[i]) * sin((i-1)*t) for i=1:N]
-    z = 150
+remap_idx(i::Int) = (-1)^i * floor(Int, i / 2)
+remap_inv(n::Int) = 2n * sign(n) - 1 * (n > 0)
+
+function driver(T,Cs, trace)
+    testData = 
+    Csp = x-> interpolateData(Cs,x)
+    N = length(Cs)
+    range = N÷2
+    dt = 1/N
+    Czs = [Cs[remap_idx(i)]*cispi(remap_idx(i)*-2*T) for i=1:N]
+    Xs = 2 .* real.(Czs)
+    Ys = 2 .* imag.(Czs)
+    z = 2
     lines = collect(IterTools.partition(accumulate(.+,zip(Xs,Ys)),2,1))
     push!(trace,last(lines)[2])
     #println(trace)
     trace_lines = collect(IterTools.partition(trace,2,1))
     compose(
-        context(0.05,0.05,0.9,0.9), 
-        (context(units=UnitBox(-z,-z,2z,2z)),
+        context(units=UnitBox(0,0,1z,1z)), 
+        (context(),
             line(lines),stroke("grey"), linewidth(1px)),
-        (context(units=UnitBox(-z,-z,2z,2z)),
+        (context(),
             line(trace_lines),stroke("white"), linewidth(1px)),  
     )
 
 end
 
-function animate(consts)
-    dim = 256px
-    set_default_graphic_size(dim, dim)
-
-    Cs = consts
-    N = length(Cs)
+function animate(data)
+    consts,width,height = data
+    dim = 512px
+    set_default_graphic_size(width * 1px, height * 1px)
     time = 10
     trace = []
     film = roll(fps=30, duration=time) do t, dt
-        driver(t,N,Cs,trace)
+        driver(t/time,consts,trace)
     end
     write("output.gif", film)
 end
 
 function main()
-    input_text = "hello world"
+    input_text = "ROBERT"
     input_text |> 
     textToImage |> 
     edgeDetection |> 
