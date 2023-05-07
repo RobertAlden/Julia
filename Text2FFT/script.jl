@@ -5,23 +5,35 @@ import Cairo, Fontconfig
 using Random, IterTools
 
 function textToImage(txt)
+    code = string(sum(Int(c)*932931 for c in txt) % 10000)
+    header = "output-$code"
+    tag = "$header/$code"
+    filename = "$tag-text.png"
+    width = (32*length(txt))
+    isfile(filename) && return (tag,FileIO.load(filename)),(width,72)
+
     text_composition = compose(context(),
     (context(), 
         text(0.5,0.5,txt,hcenter,vcenter),
-        fontsize(55px), stroke("red"), font("Bahnschrift")),
+        fontsize(50px), stroke("red"), font("Fira Code Light")),
     (context(), rectangle(),fill("white"))
     )
-    draw(PNG("text.png",(32*length(txt))px, 72px),text_composition)
-    FileIO.load("text.png")
+    isdir(header) || mkdir(header)
+    draw(PNG(filename,(width)px, 72px),text_composition)
+    (tag,FileIO.load(filename)),(width,72)
 end
 
-function edgeDetection(img)
-    alg = Canny(spatial_scale=3, high=Percentile(75), low=Percentile(60))
-    detect_edges(img, alg)
+function edgeDetection(tag,img,scale,h,l)
+    alg = Canny(spatial_scale=scale, high=Percentile(h), low=Percentile(l))
+    res = detect_edges(img, alg)
+    FileIO.save("$tag-edge.png", res)
+    res
 end
 
-function edgeSimplification(img)
+function edgeSimplification(img,tag)
+    filename = "$tag-edge-simple.png"
     height,width = size(img)
+    isfile(filename) && return findall(map(x->x==RGB(1,1,1),FileIO.load(filename)))
     points = findall(x->x === RGB(1,1,1), img)
     field = zeros(Int,height,width)
     field[points] .= 1
@@ -29,15 +41,16 @@ function edgeSimplification(img)
     region = -r:r
     mask1 = [0 1 0; 0 1 0; 0 1 0]
     mask2 = [1 0 0; 0 1 0; 0 0 1]
-    masks = [mask1,mask1',mask2,reverse(mask2)]
+    mask3 = [1 0 0; 0 1 0; 0 1 0]
+    masks = [mask1,mask1',mask2,reverse(mask2),mask3, mask3',reverse(mask3)']
     @views for x=r+1:width-r, y=r+1:height-r
         area = field[y.+region, x.+region]
-        if sum(area) >= 4 || any(masks .== [area])
+        if any(masks .== [area]) || sum(area) >= 6 
             field[y,x] = 0
         end
     end
-    points = findall(x->x == 1, field)
-    points,width,height
+    FileIO.save(filename, map(x->RGB(x,x,x),field))
+    findall(x->x == 1, field)
 end
 
 function distance2(ab) 
@@ -52,12 +65,10 @@ end
 function two_opt(points)
     N = length(points)
     path = [1:N;]
-    startLength = pathDistance2(points[path])
-    currentLength = startLength
     improvement = true
-    @views while improvement
+    @inbounds @views while improvement
         improvement = false
-        for u=0:N, v=u+1:N-1
+        for u=0:N-2, v=u+1:N-1
             i = u + 1
             j = v + 1
             AC = points[path[[i,mod1(i+1,N)]]]
@@ -66,11 +77,8 @@ function two_opt(points)
             CD = points[path[[mod1(i+1,N),mod1(j+1,N)]]]
             ACBD = (distance2(AC) + distance2(BD))
             ABCD = (distance2(AB) + distance2(CD))
-            lengthDelta = -ACBD + ABCD
-            if lengthDelta < 0
+            if -ACBD + ABCD < 0
                 path[i+1:j] .= reverse(path[i+1:j])
-                currentLength += lengthDelta
-                currentLength < 0 && break
                 improvement = true
             end
         end
@@ -78,54 +86,51 @@ function two_opt(points)
     path
 end
 
-function three_opt(points)
-    N = length(points)
-    path = [1:N;]
-    startLength = pathDistance2(points[path])
-    currentLength = startLength
-    improvement = true
-    @views while improvement
-        improvement = false
-        for u=1:N-1, v=u+2:N-1, w=v+2:N
-            i = u + 1
-            j = v + 1
-            k = w + 1
-            A,B,C,D,E,F = i-1,i,j-1,j,k-1,mod1(k,N)
-            d0 = distance2(points[path[[A,B]]]) + distance2(points[path[[C,D]]]) + distance2(points[path[[E,F]]])
-            d1 = distance2(points[path[[A,C]]]) + distance2(points[path[[B,D]]]) + distance2(points[path[[E,F]]])
-            d2 = distance2(points[path[[A,B]]]) + distance2(points[path[[C,E]]]) + distance2(points[path[[D,F]]])
-            d3 = distance2(points[path[[A,D]]]) + distance2(points[path[[E,B]]]) + distance2(points[path[[C,F]]])
-            d4 = distance2(points[path[[F,B]]]) + distance2(points[path[[C,D]]]) + distance2(points[path[[E,A]]])
-            lengthDelta = 0
-            if d0 > d1 
-                path[i:j-1] .= reverse(path[i:j-1])
-                lengthDelta = -d0 + d1
-            elseif d0 > d2
-                path[j:k-1] .= reverse(path[j:k-1])
-                lengthDelta = -d0 + d2
-            elseif d0 > d4
-                path[i:k-1] .= reverse(path[i:k-1])
-                lengthDelta = -d0 + d4
-            elseif d0 > d3
-                tmp = [j:k-1;i:j-1] 
-                path[i:k-1] .= path[tmp]
-                lengthDelta = -d0 + d3
-            end
-            if lengthDelta < 0
-                currentLength += lengthDelta
-                currentLength < 0 && break
-                improvement = true
-            end
-        end
-    end
-    path
-end
+# function three_opt(points)
+#     N = length(points)
+#     path = [1:N;]
+#     startLength = pathDistance2(points[path])
+#     currentLength = startLength
+#     improvement = true
+#     @inbounds @views while improvement
+#         improvement = false
+#         for u=1:N-1, v=u+2:N-1, w=v+2:N
+#             i = u + 1
+#             j = v + 1
+#             k = w + 1
+#             A,B,C,D,E,F = i-1,i,j-1,j,k-1,mod1(k,N)
+#             d0 = distance2(points[path[[A,B]]]) + distance2(points[path[[C,D]]]) + distance2(points[path[[E,F]]])
+#             d1 = distance2(points[path[[A,C]]]) + distance2(points[path[[B,D]]]) + distance2(points[path[[E,F]]])
+#             d2 = distance2(points[path[[A,B]]]) + distance2(points[path[[C,E]]]) + distance2(points[path[[D,F]]])
+#             d3 = distance2(points[path[[A,D]]]) + distance2(points[path[[E,B]]]) + distance2(points[path[[C,F]]])
+#             d4 = distance2(points[path[[F,B]]]) + distance2(points[path[[C,D]]]) + distance2(points[path[[E,A]]])
+#             lengthDelta = 0
+#             if d0 > d1 
+#                 path[i-1:j-1] .= reverse(path[i-1:j-1])
+#                 lengthDelta = -d0 + d1
+#             elseif d0 > d2
+#                 path[j-1:k-1] .= reverse(path[j-1:k-1])
+#                 lengthDelta = -d0 + d2
+#             elseif d0 > d4
+#                 path[i-1:k-1] .= reverse(path[i-1:k-1])
+#                 lengthDelta = -d0 + d4
+#             elseif d0 > d3
+#                 tmp = [j-1:k-1;i-1:j-1] 
+#                 path[i-1:k-1] .= path[tmp]
+#                 lengthDelta = -d0 + d3
+#             end
+#             if lengthDelta < 0
+#                 currentLength += lengthDelta
+#                 currentLength < 0 && break
+#                 improvement = true
+#             end
+#         end
+#     end
+#     path
+# end
 
-function TSP(data)
-    edges,width,height = data
+function TSP(edges,tag,width,height)
     points = [Tuple(i) for i in edges]
-    intial_distance = pathDistance2(points[[1:length(points);]])
-    #points = filter(_->rand() < 1,points)
     two_opt_path = two_opt(points)
     push!(two_opt_path,first(two_opt_path))
     lines2::Vector{Tuple{Int64,Int64}} = [(i[2],i[1]) for i in points[two_opt_path]]
@@ -135,27 +140,8 @@ function TSP(data)
                     (context(), line(lines2), stroke("white"), linewidth(1px))
                     ,(context(), rectangle(), fill("black"))
                   )
-    draw(PNG("2opt-tsp.png", (width)px, (height)px), composition)
-    two_opt_distance = pathDistance2(points[two_opt_path])
-    println("Distance reduction: $(1-two_opt_distance/intial_distance)% (2opt)")
-
-    # Random.seed!(10) 
-    # 
-    # three_opt_path = three_opt(points3opt)
-    # push!(three_opt_path,first(three_opt_path))
-    # lines3::Vector{Tuple{Int64,Int64}} = [(i[2],i[1]) for i in points3opt[three_opt_path]]
-    # push!(lines3,lines3[1])
-    # composition2 = compose(
-    #                 context(units=UnitBox(0,0,width,height)), 
-    #                 (context(), line(lines3), stroke("white"), linewidth(1px))
-    #                 ,(context(), rectangle(), fill("black"))
-    #               )
-    # draw(PNG("3opt-tsp.png", (width)px, (height)px), composition2)
-    # three_opt_intial_distance = pathDistance2(points3opt[[1:length(points3opt);]])
-    # three_opt_distance =  pathDistance2(points3opt[three_opt_path])
-    # println("Distance reduction: $(1-three_opt_distance/three_opt_intial_distance)% (3opt)")
-    # path = two_opt_distance < three_opt_distance ? points[two_opt_path] : points3opt[three_opt_path]
-    (points[two_opt_path],width,height)
+    draw(PNG("$tag-2opt-tsp.png", (width)px, (height)px), composition)
+    points[two_opt_path]
 end
 
 function interpolateData(data,t) 
@@ -168,67 +154,78 @@ function interpolateData(data,t)
     lerp(data[ti+1],data[ti+2],subt)
 end 
 
-function fourierSeries(data)
-    path,width,height = data
+function fourierSeries(path,circles,width,height)
     N = length(path)
     dt = 1/N
-    println("dt/N:$dt $N")
     Ft = complex.(last.(path)/width,first.(path)/height)
-    c = 2500
+    c = circles
     dc = 1/c
     Fti = [interpolateData(Ft,t) for t=0:dc:1]   
-
     fs = fft(Fti) |> FFTView
     fs ./= c
-    fs,width,height
+    fs
 end
 
 remap_idx(i::Int) = (-1)^i * floor(Int, i / 2)
-remap_inv(n::Int) = 2n * sign(n) - 1 * (n > 0)
 
-function driver(T,Cs,trace,)
+function driver(T,DT,target_dt,Cs,trace)
     N = length(Cs)
-    Czs = [Cs[remap_idx(i)]*cispi(remap_idx(i)*-2*T) for i=1:N]
-    Xs = 2 .* real.(Czs)
-    Ys = 2 .* imag.(Czs)
-    z = 2
-    lines = collect(IterTools.partition(accumulate(.+,zip(Xs,Ys)),2,1))
 
-    push!(trace,reduce(.+,zip(Xs,Ys)))
+    Czs = [Cs[remap_idx(i)]*cispi(remap_idx(i)*-2*T) for i=1:N]
+    lines = collect(IterTools.partition(accumulate(.+,zip(real.(Czs),imag.(Czs))),2,1))
+
+    for time=T:DT/target_dt:T+DT
+        Czs = [Cs[remap_idx(i)]*cispi(remap_idx(i)*-2*time) for i=1:N]
+        tsub = reduce(.+,zip(real.(Czs),imag.(Czs)))
+        push!(trace,tsub)
+    end
     trace_lines = collect(IterTools.partition(trace,2,1))
     compose(
-        context(units=UnitBox(0,0,1z,1z)), 
+        context(), 
         (context(),
-            line(lines),stroke("grey"), linewidth(2px)),
+            line(lines),stroke("red"), linewidth(1px)),
         (context(),
-            line(trace_lines),stroke("yellow"), linewidth(3px)),
+            line(trace_lines),stroke("yellow"), linewidth(1px)),
         (context(), rectangle(), fill("black")) 
     )
 
 end
 
-function animate(data)
-    consts,width,height = data
-    scale = 2
+function animate(consts,intermediate_frames,width,height)
+    scale = 1
     set_default_graphic_size(width * scale * 1px, height * scale * 1px)
     println("Final dimensions: $([width,height].*scale)px")
-    time = 30
+    time = 5
+    rate = 2
+    target_dt = intermediate_frames
     trace = []
     film = roll(fps=30, duration=time) do t, dt
-        driver(t/time*2,consts,trace)
+        @views @inbounds driver((t/time)*rate,(dt/time),target_dt,consts,trace)
     end
-    write("output.gif", film)
+    println("Calcuated $(length(trace)) values in total.")
+    film
 end
 
 function main()
-    input_text = "Poggers"
-    input_text |> 
-    textToImage |> 
-    edgeDetection |> 
-    edgeSimplification |> 
-    TSP |>
-    fourierSeries |>
-    animate
+    input_text = "Holy Shart"
+    terms = 500
+    subvalues = 100
+    blur = 2
+
+    ((tag,img),(width,height)) = textToImage(input_text)
+    #println((tag,img),(width,height))
+    p1 = edgeDetection(tag,img,blur,80,60)
+    println(typeof(p1))
+    p2 = edgeSimplification(p1,tag)
+    println(typeof(p2))
+    @time p3 = TSP(p2,tag,width,height) 
+    println(typeof(p3))
+    p4 = fourierSeries(p3,terms,width,height)
+    println(typeof(p4))
+    p5 = animate(p4,subvalues,width,height)
+    filename = "$tag-output.gif"
+    write(filename, p5)
+    "Done. Results @ $filename"
 end
 
 @time main()
