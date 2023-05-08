@@ -206,8 +206,9 @@ function animate(consts,intermediate_frames,width,height)
     film
 end
 
-function main()
-    input_text = "Holy Shart"
+function main(args)
+    println(args)
+    input_text = args[1]
     terms = 500
     subvalues = 100
     blur = 2
@@ -215,17 +216,17 @@ function main()
     ((tag,img),(width,height)) = textToImage(input_text)
     #println((tag,img),(width,height))
     p1 = edgeDetection(tag,img,blur,80,60)
-    println(typeof(p1))
+    #println(typeof(p1))
     p2 = edgeSimplification(p1,tag)
-    println(typeof(p2))
+    #println(typeof(p2))
     @time p3 = TSP(p2,tag,width,height) 
-    println(typeof(p3))
+    #println(typeof(p3))
     p4 = fourierSeries(p3,terms,width,height)
-    println(typeof(p4))
+    #println(typeof(p4))
     p5 = animate(p4,subvalues,width,height)
     filename = "$tag-output.gif"
     write(filename, p5)
-    "Done. Results @ $filename"
+    "$filename"
 end
 
-@time main()
+@time println(main(ARGS))
