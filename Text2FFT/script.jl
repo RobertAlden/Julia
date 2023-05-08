@@ -229,4 +229,4 @@ function main(args)
     "$filename"
 end
 
-@time println(main(ARGS))
+println(main(ARGS))
