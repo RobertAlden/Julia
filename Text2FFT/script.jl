@@ -213,9 +213,9 @@ end
 function process(input_text::String)
     input_text = input_text
     terms = 250
-    subvalues = 100
-    blur = 3
-    time = 5
+    subvalues = 10
+    blur = 2
+    time = 10
 
     ((tag,img),(width,height)) = textToImage(input_text)
     p1 = edgeDetection(tag,img,blur,80,60)
@@ -230,20 +230,21 @@ end
 
 form = """
 <form action="/" method="POST" enctype="multipart/form-data">
-  <label for="word">Input Text: </label><input type="text" name="word" />
-  <br/><input type="submit" value="Fourier this text!" />
+    <label for="word">Input Text: </label><input type="text" name="word" />
+    <br/><input type="submit" value="Fourier this text!" />
 </form>
 """
 
 route("/") do
-  html(form)
+    html(form)
 end
 
 route("/", method = POST) do
-    word = postpayload(:word, "Null")
+    word = postpayload(:word, "null")
     gif::String = process(word)
     data = base64encode(read(gif, String))
-    html("""<img src="data:image/gif;base64,$data">""")
+    results = """<br><label></label><img src="data:image/gif;base64,$data">"""
+    html(form * results)
 end
 
 up()
