@@ -241,7 +241,6 @@ end
 
 route("/", method = POST) do
     word = postpayload(:word, "Null")
-    println(word)
     gif::String = process(word)
     data = base64encode(read(gif, String))
     html("""<img src="data:image/gif;base64,$data">""")
