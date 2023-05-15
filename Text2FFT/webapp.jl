@@ -1,11 +1,13 @@
-using Genie, Genie.Renderer.Html, Genie.Requests, Genie.Router
+using AbbreviatedStackTraces
+using Genie, Genie.Router
+using Genie.Renderer, Genie.Renderer.Html, Genie.Renderer.Json
 using Base64, FileIO
 
 
 form = """
-<form action="/fourier" method="POST" enctype="multipart/form-data">
-  <input type="text" name="word" value="" placeholder="Enter a word you want to turn into a gif." />
-  <input type="submit" value="Fourier Me!" />
+<form action="/" method="POST" enctype="multipart/form-data">
+  <label for="dataFile">Input Text: </label><input type="text" name="word" />
+  <br/><input type="submit" value="Fourier this text!" />
 </form>
 """
 
@@ -13,9 +15,9 @@ route("/") do
   html(form)
 end
 
-route("/fourier", method=POST) do
-    pwd() * "\\Text2FFT\\public\\4645-output.gif"
+route("/", method = POST) do
+  data = base64encode(read("test.gif", String))
+  html("""<img src="data:image/gif;base64,$data">""")
 end
-  
-down()
+
 up()

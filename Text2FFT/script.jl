@@ -2,6 +2,11 @@ using Compose, Colors, Reel, FileIO, ImageFiltering, Images, ImageEdgeDetection,
 using ImageEdgeDetection: Percentile
 import Cairo, Fontconfig
 
+# webapp stuff
+using AbbreviatedStackTraces
+using Genie, Base64
+using Genie.Router, Genie.Requests, Genie.Renderer, Genie.Renderer.Html, Genie.Renderer.Json
+
 using Random, IterTools
 
 function textToImage(txt)
@@ -10,11 +15,11 @@ function textToImage(txt)
     tag = "$header/$code"
     filename = "$tag-text.png"
     width = (32*length(txt))
-    isfile(filename) && return (tag,FileIO.load(filename)),(width,72)
+    #isfile(filename) && return (tag,FileIO.load(filename)),(width,72)
 
     text_composition = compose(context(),
     (context(), 
-        text(0.5,0.5,txt,hcenter,vcenter),
+    Compose.text(0.5,0.5,txt,hcenter,vcenter),
         fontsize(50px), stroke("red"), font("Fira Code Light")),
     (context(), rectangle(),fill("white"))
     )
@@ -33,7 +38,7 @@ end
 function edgeSimplification(img,tag)
     filename = "$tag-edge-simple.png"
     height,width = size(img)
-    isfile(filename) && return findall(map(x->x==RGB(1,1,1),FileIO.load(filename)))
+    #isfile(filename) && return findall(map(x->x==RGB(1,1,1),FileIO.load(filename)))
     points = findall(x->x === RGB(1,1,1), img)
     field = zeros(Int,height,width)
     field[points] .= 1
@@ -45,7 +50,7 @@ function edgeSimplification(img,tag)
     masks = [mask1,mask1',mask2,reverse(mask2),mask3, mask3',reverse(mask3)']
     @views for x=r+1:width-r, y=r+1:height-r
         area = field[y.+region, x.+region]
-        if any(masks .== [area]) || sum(area) >= 6 
+        if any(masks .== [area]) || sum(area) >= 3 
             field[y,x] = 0
         end
     end
@@ -137,7 +142,7 @@ function TSP(edges,tag,width,height)
     push!(lines2,lines2[1])
     composition = compose(
                     context(units=UnitBox(0,0,width,height)), 
-                    (context(), line(lines2), stroke("white"), linewidth(1px))
+                    (context(), Compose.line(lines2), stroke("white"), linewidth(1px))
                     ,(context(), rectangle(), fill("black"))
                   )
     draw(PNG("$tag-2opt-tsp.png", (width)px, (height)px), composition)
@@ -183,50 +188,63 @@ function driver(T,DT,target_dt,Cs,trace)
     compose(
         context(), 
         (context(),
-            line(lines),stroke("red"), linewidth(1px)),
+            Compose.line(lines),stroke("red"), linewidth(1px)),
         (context(),
-            line(trace_lines),stroke("yellow"), linewidth(1px)),
+            Compose.line(trace_lines),stroke("yellow"), linewidth(1px)),
         (context(), rectangle(), fill("black")) 
     )
 
 end
 
-function animate(consts,intermediate_frames,width,height)
+function animate(consts,intermediate_frames,dur,width,height)
     scale = 1
     set_default_graphic_size(width * scale * 1px, height * scale * 1px)
     println("Final dimensions: $([width,height].*scale)px")
-    time = 5
     rate = 2
     target_dt = intermediate_frames
     trace = []
-    film = roll(fps=30, duration=time) do t, dt
-        @views @inbounds driver((t/time)*rate,(dt/time),target_dt,consts,trace)
+    film = roll(fps=30, duration=dur) do t, dt
+        driver((t/dur)*rate,(dt/dur),target_dt,consts,trace)
     end
     println("Calcuated $(length(trace)) values in total.")
     film
 end
 
-function main(args)
-    println(args)
-    input_text = args[1]
-    terms = 500
+function process(input_text::String)
+    input_text = input_text
+    terms = 250
     subvalues = 100
-    blur = 2
+    blur = 3
+    time = 5
 
     ((tag,img),(width,height)) = textToImage(input_text)
-    #println((tag,img),(width,height))
     p1 = edgeDetection(tag,img,blur,80,60)
-    #println(typeof(p1))
     p2 = edgeSimplification(p1,tag)
-    #println(typeof(p2))
-    @time p3 = TSP(p2,tag,width,height) 
-    #println(typeof(p3))
+    p3 = TSP(p2,tag,width,height) 
     p4 = fourierSeries(p3,terms,width,height)
-    #println(typeof(p4))
-    p5 = animate(p4,subvalues,width,height)
+    p5 = animate(p4,subvalues,time,width,height)
     filename = "$tag-output.gif"
     write(filename, p5)
     "$filename"
 end
 
-println(main(ARGS))
+form = """
+<form action="/" method="POST" enctype="multipart/form-data">
+  <label for="word">Input Text: </label><input type="text" name="word" />
+  <br/><input type="submit" value="Fourier this text!" />
+</form>
+"""
+
+route("/") do
+  html(form)
+end
+
+route("/", method = POST) do
+    word = postpayload(:word, "Null")
+    println(word)
+    gif::String = process(word)
+    data = base64encode(read(gif, String))
+    html("""<img src="data:image/gif;base64,$data">""")
+end
+
+up()
