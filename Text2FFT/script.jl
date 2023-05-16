@@ -245,8 +245,8 @@ end
 
 route("/", method = POST) do
     word = postpayload(:word, "null")
-    terms = postpayload(:terms, 100)
-    precision = postpayload(:precision, 5)
+    terms = parse(Int, postpayload(:terms, "100"))
+    precision = parse(Int, postpayload(:precision, "5"))
     gif::String = process(word, terms, precision)
     data = base64encode(read(gif, String))
     results = """<br><label></label><img src="data:image/gif;base64,$data">"""
