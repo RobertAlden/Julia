@@ -23,7 +23,7 @@ function main()
     context = 35
     map = markovMap(lowercase(text), context)
     output = ""
-    for i=1:20
+    for i=1:50
         output *= produceNext("", map, context)
     end
     output
