@@ -19,7 +19,7 @@ function markovMap(text::String,tokenLength::Int)
 end
 
 function main()
-    text = join(readlines("markov-goober/raw-text.txt"))
+    text = join(readlines("markov-goober/Crusoe-text.txt"))
     context = 35
     map = markovMap(lowercase(text), context)
     output = ""
