@@ -231,10 +231,8 @@ end
 form = """
 <form action="/" method="POST" enctype="multipart/form-data">
     <label for="word">Input Text: </label><input type="text" name="word" /><br>
-    <label for="terms">Epicycle #: </label>
-    <input type="number" name="terms" min="1" max="1000"><br>
-    <label for="terms">Precision: </label>
-    <input type="number" name="precision" min="1" max="100"><br>
+    <label for="terms">Epicycle #: </label><input type="number" name="terms" min="1" max="1000" value="250" required><br>
+    <label for="precision">Precision: </label> <input type="number" name="precision" min="1" max="100" required><br>
     <br/><input type="submit" value="Fourier this text!" />
 </form>
 """
