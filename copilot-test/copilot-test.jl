@@ -1,5 +1,5 @@
 using AbbreviatedStackTraces
-using Genie, FileIO, Mmap, Images, ImageCore, HTTP
+using Genie, FileIO, Images
 using Genie.Router, Genie.Renderer.Html, Genie.Renderer.Json, Genie.Requests
 using Base64
 
@@ -36,7 +36,7 @@ route("/fourier", method = POST) do
         img = Images.load(IOBuffer(data))
         gif = Text2FFT.img2fft(img, userFile.name, terms, precision)
     else    
-        gif = Text2FFT.text2fft(word, terms, precision)
+        gif = Text2FFT.txt2fft(word, terms, precision)
     end
     html(response, data=base64encode(read(gif, String)))
 end
