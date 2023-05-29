@@ -41,4 +41,4 @@ route("/fourier", method = POST) do
     html(response, data=base64encode(read(gif, String)))
 end
 
-up()
+up(8000, "127.0.0.1")
