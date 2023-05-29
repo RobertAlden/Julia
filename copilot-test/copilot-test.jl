@@ -1,12 +1,13 @@
-# using Genie to set up a simple website
+using AbbreviatedStackTraces
 using Genie, FileIO
-using Genie.Router, Genie.Renderer.Html, Genie.Renderer.Json
+using Genie.Router, Genie.Renderer.Html, Genie.Renderer.Json, Genie.Requests
 using Base64
-# import render function from Genie.Renderer.Html
+
+include("../Text2FFT/script.jl")
+using .Text2FFT
 
 # landing page
 route("/", method=GET) do
-    # load the html file as string
     response = join(readlines("copilot-test/index.html"))
     html(response)
 end
@@ -20,7 +21,19 @@ end
 # route for Fourier toy
 route("/fourier", method=GET) do
     response = join(readlines("copilot-test/fourier.html"))
-    html(response)
+    html(response, data = "")
+end
+
+# handle response from Fourier toy
+route("/fourier", method = POST) do
+    response = join(readlines("copilot-test/fourier.html"))
+    word = postpayload(:word, "null")
+    terms = parse(Int, postpayload(:terms, "100"))
+    precision = parse(Int, postpayload(:precision, "5"))
+    gif = Text2FFT.text2fft(word, terms, precision)
+    gif::String = Text2FFT.text2fft(word, terms, precision)
+    gif_data = base64encode(read(gif, String))
+    html(response, data=gif_data)
 end
 
 up()

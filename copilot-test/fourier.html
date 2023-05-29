@@ -19,17 +19,39 @@
                 <nav>
                     <ul>
                         <li><a href="/">Home</a></li>
+                        <li><a href="/fourier">Fourier-er</a></li>
                         <li><a href="/about">About this site</a></li>
                     </ul>
                 </nav>
             </header>
-            <h2>content header</h2>
+            <h2>Fourier Epicyclic Gif Generator-omatic</h2>
+            <body>
+                <p>
+                    This is a tool to generate gifs of epicyclic curves based on the fourier transform of a given text. 
+                    The text is converted to a series of points, and the fourier transform is used to find the epicycles that best fit the points. 
+                    The epicycles are then drawn in sequence to create the gif. 
+                    <br>Images coming soon. 
+                </p>
+            </body>
             
-            <form action="/" method="POST" enctype="multipart/form-data">
-                <label for="dataFile">Input Text: </label><input type="text" name="word" />
-                <br/><input type="submit" value="Fourier this text!" />
+            <form action="/fourier" method="POST" enctype="multipart/form-data">
+                <label for="word">Input Text: </label><input type="text" name="word" /><br>
+                <label for="terms">Epicycle #: </label><input type="number" name="terms" min="1" max="1000" value="250" required><br>
+                <label for="precision">Precision: </label> <input type="number" name="precision" min="1" max="100" required><br>
+                <button type="submit" aria-busy="false" onclick="doClick()">Fourier this text!</button>
             </form>
 
+            <p>
+                Your gif will appear below:<br>
+            </p>
+            <img src="data:image/gif;base64,$(vars(:data))">
+
+            <script>
+                function doClick() {
+                    document.querySelector('input[type="submit"]').setAttribute('aria-busy', true);
+                    //document.querySelector('input[type="submit"]').setAttribute('disabled', true);
+                } 
+            </script>
             <footer><small>Footer</small></footer>
         </article>
     </main>

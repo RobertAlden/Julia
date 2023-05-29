@@ -1,3 +1,6 @@
+module Text2FFT
+export text2fft
+
 using Compose, Colors, Reel, FileIO, ImageFiltering, Images, ImageEdgeDetection, Match, AbbreviatedStackTraces, FFTW, FFTViews
 using ImageEdgeDetection: Percentile
 import Cairo, Fontconfig
@@ -210,7 +213,7 @@ function animate(consts,intermediate_frames,dur,width,height)
     film
 end
 
-function process(input_text::String, terms::Integer, subvalues::Integer)
+function text2fft(input_text::String, terms::Integer, subvalues::Integer)
     input_text = input_text
     terms = terms
     subvalues = subvalues
@@ -228,27 +231,6 @@ function process(input_text::String, terms::Integer, subvalues::Integer)
     "$filename"
 end
 
-form = """
-<form action="/" method="POST" enctype="multipart/form-data">
-    <label for="word">Input Text: </label><input type="text" name="word" /><br>
-    <label for="terms">Epicycle #: </label><input type="number" name="terms" min="1" max="1000" value="250" required><br>
-    <label for="precision">Precision: </label> <input type="number" name="precision" min="1" max="100" required><br>
-    <br/><input type="submit" value="Fourier this text!" />
-</form>
-"""
 
-route("/") do
-    html(form)
 end
 
-route("/", method = POST) do
-    word = postpayload(:word, "null")
-    terms = parse(Int, postpayload(:terms, "100"))
-    precision = parse(Int, postpayload(:precision, "5"))
-    gif::String = process(word, terms, precision)
-    data = base64encode(read(gif, String))
-    results = """<br><label></label><img src="data:image/gif;base64,$data">"""
-    html(form * results)
-end
-
-up(8000, "127.0.0.1")
