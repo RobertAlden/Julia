@@ -210,10 +210,10 @@ function animate(consts,intermediate_frames,dur,width,height)
     film
 end
 
-function process(input_text::String)
+function process(input_text::String, terms::Integer, subvalues::Integer)
     input_text = input_text
-    terms = 250
-    subvalues = 10
+    terms = terms
+    subvalues = subvalues
     blur = 2
     time = 10
 
@@ -230,7 +230,9 @@ end
 
 form = """
 <form action="/" method="POST" enctype="multipart/form-data">
-    <label for="word">Input Text: </label><input type="text" name="word" />
+    <label for="word">Input Text: </label><input type="text" name="word" /><br>
+    <label for="terms">Epicycle #: </label><input type="number" name="terms" min="1" max="1000" value="250" required><br>
+    <label for="precision">Precision: </label> <input type="number" name="precision" min="1" max="100" required><br>
     <br/><input type="submit" value="Fourier this text!" />
 </form>
 """
@@ -241,10 +243,12 @@ end
 
 route("/", method = POST) do
     word = postpayload(:word, "null")
-    gif::String = process(word)
+    terms = parse(Int, postpayload(:terms, "100"))
+    precision = parse(Int, postpayload(:precision, "5"))
+    gif::String = process(word, terms, precision)
     data = base64encode(read(gif, String))
     results = """<br><label></label><img src="data:image/gif;base64,$data">"""
     html(form * results)
 end
 
-up()
+up(8000, "127.0.0.1")
