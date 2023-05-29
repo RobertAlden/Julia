@@ -1,24 +1,16 @@
 module Text2FFT
-export text2fft
+export txt2fft, img2fft
 
-using Compose, Colors, Reel, FileIO, ImageFiltering, Images, ImageEdgeDetection, Match, AbbreviatedStackTraces, FFTW, FFTViews
+using Compose, Colors, Reel, FileIO, ImageFiltering, Images, ImageEdgeDetection, Match, FFTW, FFTViews
 using ImageEdgeDetection: Percentile
 import Cairo, Fontconfig
 
-# webapp stuff
-using AbbreviatedStackTraces
-using Genie, Base64
-using Genie.Router, Genie.Requests, Genie.Renderer, Genie.Renderer.Html, Genie.Renderer.Json
-
 using Random, IterTools
 
-function textToImage(txt)
-    code = string(sum(Int(c)*932931 for c in txt) % 10000)
-    header = "output-$code"
-    tag = "$header/$code"
-    filename = "$tag-text.png"
+function textToImage(txt::String)
+    code = string(sum(Int(c)*1493621697 for c in txt) % 121391351)
+    filename = "$code-text.png"
     width = (32*length(txt))
-    #isfile(filename) && return (tag,FileIO.load(filename)),(width,72)
 
     text_composition = compose(context(),
     (context(), 
@@ -26,22 +18,19 @@ function textToImage(txt)
         fontsize(50px), stroke("red"), font("Fira Code Light")),
     (context(), rectangle(),fill("white"))
     )
-    isdir(header) || mkdir(header)
     draw(PNG(filename,(width)px, 72px),text_composition)
-    (tag,FileIO.load(filename)),(width,72)
+    data = FileIO.load(filename)
+    rm(filename)
+    data
 end
 
-function edgeDetection(tag,img,scale,h,l)
+function edgeDetection(img::Matrix{RGB{N0f8}},scale,h,l)
     alg = Canny(spatial_scale=scale, high=Percentile(h), low=Percentile(l))
-    res = detect_edges(img, alg)
-    FileIO.save("$tag-edge.png", res)
-    res
+    detect_edges(img, alg)
 end
 
-function edgeSimplification(img,tag)
-    filename = "$tag-edge-simple.png"
+function edgeSimplification(img::Matrix{RGB{N0f8}})
     height,width = size(img)
-    #isfile(filename) && return findall(map(x->x==RGB(1,1,1),FileIO.load(filename)))
     points = findall(x->x === RGB(1,1,1), img)
     field = zeros(Int,height,width)
     field[points] .= 1
@@ -57,7 +46,6 @@ function edgeSimplification(img,tag)
             field[y,x] = 0
         end
     end
-    FileIO.save(filename, map(x->RGB(x,x,x),field))
     findall(x->x == 1, field)
 end
 
@@ -66,11 +54,7 @@ function distance2(ab)
     (ax-bx)^2 + (ay-by)^2
 end
 
-function pathDistance2(path)
-    sum(distance2.(partition([path;[path[1]]],2,1)))
-end
-
-function two_opt(points)
+function twoOpt(points::Vector{Tuple{Int,Int}})
     N = length(points)
     path = [1:N;]
     improvement = true
@@ -137,19 +121,11 @@ end
 #     path
 # end
 
-function TSP(edges,tag,width,height)
+function TSP(edges::Vector{CartesianIndex{2}})
     points = [Tuple(i) for i in edges]
-    two_opt_path = two_opt(points)
-    push!(two_opt_path,first(two_opt_path))
-    lines2::Vector{Tuple{Int64,Int64}} = [(i[2],i[1]) for i in points[two_opt_path]]
-    push!(lines2,lines2[1])
-    composition = compose(
-                    context(units=UnitBox(0,0,width,height)), 
-                    (context(), Compose.line(lines2), stroke("white"), linewidth(1px))
-                    ,(context(), rectangle(), fill("black"))
-                  )
-    draw(PNG("$tag-2opt-tsp.png", (width)px, (height)px), composition)
-    points[two_opt_path]
+    twoOptPath = twoOpt(points)
+    push!(twoOptPath,first(twoOptPath))
+    points[twoOptPath]
 end
 
 function interpolateData(data,t) 
@@ -162,7 +138,7 @@ function interpolateData(data,t)
     lerp(data[ti+1],data[ti+2],subt)
 end 
 
-function fourierSeries(path,circles,width,height)
+function fourierSeries(path::Vector{Tuple{Int, Int}},circles::Int,width::Int,height::Int)
     N = length(path)
     dt = 1/N
     Ft = complex.(last.(path)/width,first.(path)/height)
@@ -213,24 +189,37 @@ function animate(consts,intermediate_frames,dur,width,height)
     film
 end
 
-function text2fft(input_text::String, terms::Integer, subvalues::Integer)
+function txt2fft(input_text::String, terms::Integer, subvalues::Integer)
     input_text = input_text
     terms = terms
     subvalues = subvalues
     blur = 2
     time = 10
 
-    ((tag,img),(width,height)) = textToImage(input_text)
-    p1 = edgeDetection(tag,img,blur,80,60)
-    p2 = edgeSimplification(p1,tag)
-    p3 = TSP(p2,tag,width,height) 
+    img = textToImage(input_text)
+    height,width = size(img)
+    p3 = edgeDetection(img,blur,80,60) |> edgeSimplification |> TSP 
     p4 = fourierSeries(p3,terms,width,height)
     p5 = animate(p4,subvalues,time,width,height)
-    filename = "$tag-output.gif"
+    filename = "$input_text-output.gif"
     write(filename, p5)
     "$filename"
 end
 
+function img2fft(img::Matrix{RGB{N0f8}}, filename::String, terms::Integer, subvalues::Integer)
+    input_text = filename
+    terms = terms
+    subvalues = subvalues
+    blur = 2
+    time = 10
 
+    height,width = size(img)
+    p3 = edgeDetection(img,blur,80,60) |> edgeSimplification |> TSP 
+    p4 = fourierSeries(p3,terms,width,height)
+    p5 = animate(p4,subvalues,time,width,height)
+    filename = "$input_text-output.gif"
+    write(filename, p5)
+    "$filename"
 end
 
+end

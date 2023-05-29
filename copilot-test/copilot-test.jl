@@ -1,5 +1,5 @@
 using AbbreviatedStackTraces
-using Genie, FileIO
+using Genie, FileIO, Mmap, Images, ImageCore, HTTP
 using Genie.Router, Genie.Renderer.Html, Genie.Renderer.Json, Genie.Requests
 using Base64
 
@@ -30,10 +30,15 @@ route("/fourier", method = POST) do
     word = postpayload(:word, "null")
     terms = parse(Int, postpayload(:terms, "100"))
     precision = parse(Int, postpayload(:precision, "5"))
-    gif = Text2FFT.text2fft(word, terms, precision)
-    gif::String = Text2FFT.text2fft(word, terms, precision)
-    gif_data = base64encode(read(gif, String))
-    html(response, data=gif_data)
+    if infilespayload(:userFile)
+        userFile = filespayload(:userFile)
+        data::Vector{UInt8} = userFile.data
+        img = Images.load(IOBuffer(data))
+        gif = Text2FFT.img2fft(img, userFile.name, terms, precision)
+    else    
+        gif = Text2FFT.text2fft(word, terms, precision)
+    end
+    html(response, data=base64encode(read(gif, String)))
 end
 
 up()
